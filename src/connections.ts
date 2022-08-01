@@ -6,7 +6,7 @@ const createp2pnode = require('swenssonp2p');
 
 export class Connections {
     node = createp2pnode();
-    connections: { str: string, nodeId: string | null }[] = [];
+    connections: Partial<{ str: string, nodeId: string | null }>[] = [];
     pendingConnections: string[] = [];
 
     onMessage = new Subject<Message>();
@@ -27,12 +27,16 @@ export class Connections {
         this.node.on('connect', (data) => {
             console.log('Node', data.nodeId, 'has connected');
 
+            if (!this.connections.find(i => i.nodeId == data.nodeId)) {
+                this.connections.push({ nodeId: data.nodeId });
+            }
+
             this.app.orders.orders.forEach(e => {
                 this.direct(data.nodeId, new OrderAddedMessage(e));
             });
 
-            this.connections.forEach(e => {
-                this.direct(data.nodeId, new ConnectionAddedMessage(e));
+            this.connections.filter(i => !!i.str).forEach(e => {
+                this.broadcast(new ConnectionAddedMessage(e));
             })
         });
 
@@ -45,20 +49,22 @@ export class Connections {
         // Some message has been broadcasted somewhere
         // on the network and has reached us
         this.node.on('broadcast', ({ origin, message }) => {
-            this.onMessage.next(parseMessage(message));
             console.log('Message', message, 'has been broadcasted from', origin);
+            this.onMessage.next(parseMessage(message));
         });
 
         // Some message has been sent to us
         this.node.on('direct', ({ origin, message }) => {
-            this.onMessage.next(parseMessage(message));
             console.log('Message', message, 'has been directly send to us from', origin);
+            this.onMessage.next(parseMessage(message));
         });
     }
 
     connect(str) {
 
         return new Promise((resolve) => {
+            // Don't allow self-connection
+            if (str.split(":")[1] == this.app.port) return resolve(true);
             if (!this.connections.find(c => c.str == str) && !this.pendingConnections.includes(str)) {
                 this.pendingConnections.push(str);
                 console.log("Connecting to ", str);
@@ -135,7 +141,7 @@ export class OrderRemovedMessage extends Message {
 
 export class ConnectionAddedMessage extends Message {
     event = "connection.added";
-    constructor(public data: { str: string, nodeId: string | null }) {
+    constructor(public data: Partial<{ str: string, nodeId: string | null }>) {
         super(data);
     }
 }

@@ -6,24 +6,24 @@ export class State {
     apps: App[] = [];
 }
 
-export function appSetup(): State {
+export async function appSetup(): Promise<State> {
 
     const state = new State();
+    // Start up two instances of the app on available ports
+    await findPort.findPort().then(p => state.apps[0] = new App(p));
+    await findPort.findPort().then(p => state.apps[1] = new App(p));
 
-    beforeEach(async () => {
-        // Start up two instances of the app on available ports
-        await findPort.findPort().then(p => state.apps[0] = new App(p));
-        await findPort.findPort().then(p => state.apps[1] = new App(p));
-
-        await Promise.all(state.apps.map(a => a.listen()));
-    });
-
-    afterEach(async () => {
-        await Promise.all(state.apps.map(a => a.connections.close()));
-    });
+    await Promise.all(state.apps.map(a => a.listen()));
 
     return state as State;
 
+}
+
+export async function appTeardown(state: State) {
+    await Promise.all(state.apps.map(a => a.connections.close()));
+    state.apps = [];
+
+    await new Promise(resolve => setTimeout(resolve, 1000));
 }
 
 export async function connectApps(state: State) {

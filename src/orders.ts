@@ -44,16 +44,26 @@ export class Orders {
         }
     }
 
-    accept(order: Order, nodeId: string = this.app.connections.node.id) {
-        this.onAccepted.next(order);
+    accept(o: Order, nodeId: string = this.app.connections.node.id) {
+        let order = this.orders.find(i => i.id == o.id);
+        if (!order) return;
 
         // If the order belongs to us, confirm the first request
         if (order.nodeId == this.app.connections.node.id) {
             this.acceptConfirm(order, nodeId);
+        } else {
+            this.onAccepted.next(order);
         }
+
+        return order;
     }
 
     acceptConfirm(order: Order, nodeId: string) {
+        if(this.orders.find(i => i.id == order.id)?.confirmed) {
+            console.error("Order was already confirmed");
+            return;
+        }
+        console.log("Triggering confirm");
         // If the order belongs to us, then update the order to settled status
         if (order.nodeId == this.app.connections.node.id) {
             this.update({

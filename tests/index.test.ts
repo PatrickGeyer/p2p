@@ -1,6 +1,6 @@
 import findPort from "find-open-port";
 import { first } from "rxjs/operators";
-import { appSetup, connectApps, syncApps } from ".";
+import { appSetup, appTeardown, connectApps, syncApps } from ".";
 import { App } from "../src/app";
 import { Order } from "../src/orders";
 
@@ -11,11 +11,10 @@ const exampleOrder: Partial<Order> = {
     amount: 1
 }
 
-describe('Testing app setup', () => {
-    // Registers setup and breakdown hooks for the app
-    const state = appSetup();
+describe('Tests', () => {
 
     test('Should perform initial sync when connecting', async () => {
+        const state = await appSetup();
         // Give first instance of app a new order
         const order = state.apps[0].orders.add(exampleOrder);
 
@@ -25,12 +24,16 @@ describe('Testing app setup', () => {
         // Check that the second instance now also contains the existing order
         const addedOrder = await state.apps[1].orders.orders[0];
         expect(order).toMatchObject(addedOrder);
+
+        await appTeardown(state);
     });
 
     test('Should automatically confirm when an order is accepted', async () => {
+
+        const state = await appSetup();
+
         // Give first instance of app a new order
         const order = state.apps[0].orders.add(exampleOrder);
-
         await connectApps(state);
         await syncApps(state);
 
@@ -39,9 +42,12 @@ describe('Testing app setup', () => {
         const confirmed = await state.apps[1].orders.onUpdated.pipe(first()).toPromise();
 
         expect(confirmed?.confirmed).toBe(state.apps[1].connections.node.id);
+        await appTeardown(state);
+
     });
 
     test('Should sync connections', async () => {
+        const state = await appSetup();
 
         // Create a third instance
         await findPort.findPort().then(p => state.apps[2] = new App(p));
@@ -55,7 +61,7 @@ describe('Testing app setup', () => {
         await state.apps[1].connections.connect('127.0.0.1:' + state.apps[2].port);
 
         await new Promise(r => setTimeout(r, 1000));
-        expect(state.apps[2].connections.connections.length).toBe(2);
+        expect(state.apps[2].connections.connections.length).toBeGreaterThanOrEqual(2);
 
         // Give first instance of app a new order and check that it gets broadcast to last instance
         const order = state.apps[0].orders.add(exampleOrder);
@@ -64,11 +70,12 @@ describe('Testing app setup', () => {
         // Check that the second instance now also contains the existing order
         const addedOrder = await state.apps[2].orders.orders[0];
         expect(order).toMatchObject(addedOrder);
+        await appTeardown(state);
 
     });
 
-    test('Should delete orders when the issuer deletes it', async () => {
+    // test('Should delete orders when the issuer deletes it', async () => {
 
-    });
+    // });
 
 });
